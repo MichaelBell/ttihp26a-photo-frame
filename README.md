@@ -2,6 +2,8 @@
 
 # Tiny Tapeout Verilog Project Template
 
+**!! WARNING - This implementation is not yet tested.  Do not borrow code from here yet!!**
+
 - [Read the documentation for project](docs/info.md)
 
 ## What is Tiny Tapeout?
