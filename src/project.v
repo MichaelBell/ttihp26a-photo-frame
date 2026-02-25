@@ -112,9 +112,9 @@ module tt_um_MichaelBell_photo_frame (
       B <= 0;
     end else begin
       if (pixel_valid) begin
-        R <= pixel_data[2:1];
-        G <= pixel_data[5:4];
-        B <= pixel_data[7:6];
+        R <= pixel_data[7:6];
+        G <= pixel_data[4:3];
+        B <= pixel_data[1:0];
       end
     end
   end
@@ -125,6 +125,6 @@ module tt_um_MichaelBell_photo_frame (
   assign uo_out = {hsync_r, B[0], G[0], R[0], vsync_r, B[1], G[1], R[1]};
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{ena, uio_in[7:6], uio_in[0], pixel_data[3], pixel_data[0], row, 1'b0};
+  wire _unused = &{ena, uio_in[7:6], uio_in[0], pixel_data[5], pixel_data[2], row, 1'b0};
 
 endmodule

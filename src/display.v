@@ -103,14 +103,14 @@ module display (
         end
     end
 
-    assign row_pulse = (v_state == STATE_DISPLAY || (v_state == STATE_BACK && v_count == 0)) && h_count == {5'h0, pulse_count};
+    assign row_pulse = (v_state == STATE_DISPLAY || (v_state == STATE_BACK && v_count == 0)) && h_count == {5'h0, pulse_count} && (h_state == STATE_BACK);
     assign frame_pulse = (v_state == STATE_DISPLAY && h_state == STATE_DISPLAY && v_count == 0 && h_count == 0);
 
     assign row = v_state == STATE_DISPLAY ? v_count : v_display;
-    assign col = h_state == STATE_DISPLAY ? h_count : h_display;
+    assign col = (h_state == STATE_DISPLAY && v_state == STATE_DISPLAY) ? h_count : h_display;
 
-    assign hsync = (h_state == STATE_SYNC) ^ h_pol;
-    assign vsync = (v_state == STATE_SYNC) ^ v_pol;
-    assign active = (h_state == STATE_DISPLAY) && (v_state == STATE_DISPLAY);
+    assign hsync = en ? (h_state == STATE_SYNC) ^ h_pol : 1'b0;
+    assign vsync = en ? (v_state == STATE_SYNC) ^ v_pol : 1'b0;
+    assign active = en ? (h_state == STATE_DISPLAY) && (v_state == STATE_DISPLAY) : 1'b0;
 
 endmodule

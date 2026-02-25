@@ -79,17 +79,18 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
                 end
             end else begin
                 spi_clk <= !spi_clk;
-                if (bits_remaining == 0) begin
+                if (bits_remaining == 0 && (!fsm_state[0] || spi_clk)) begin
                     fsm_state <= fsm_state + 1;
-                    if (fsm_state == FSM_CMD)        bits_remaining <= 6;
-                    else if (fsm_state == FSM_ADDR)  bits_remaining <= 6;
-                    else if (fsm_state == FSM_DUMMY) bits_remaining <= 1 + latency;
+                    if (fsm_state == FSM_CMD)        bits_remaining <= 7;
+                    else if (fsm_state == FSM_ADDR)  bits_remaining <= 5;
+                    else if (fsm_state == FSM_DUMMY) bits_remaining <= 3 + latency;
                     else if (fsm_state == FSM_DATA) begin
                         bits_remaining <= 1;
                         fsm_state <= FSM_DATA;
                     end
 
-                    if (fsm_state == FSM_ADDR) spi_data_oe <= 4'b0000;
+                    if (fsm_state == FSM_CMD) spi_data_oe <= 4'b1111;
+                    else if (fsm_state == FSM_ADDR) spi_data_oe <= 4'b0000;
                 end else begin
                     if (!fsm_state[0] || spi_clk) bits_remaining <= bits_remaining - 1;
                 end
