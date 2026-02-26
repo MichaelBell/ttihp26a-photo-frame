@@ -44,10 +44,7 @@ async def expect_read_cmd(dut, addr):
         await FallingEdge(dut.qspi_clk)
         assert dut.qspi_mosi.value == (addr & 0xF00000) >> 20
         assert dut.qspi_cs.value == 0
-        if i < 3:
-            assert dut.uio_oe.value == (0b11111111 if dut.qspi_pinout.value else 0b11111111)
-        else:
-            assert dut.uio_oe.value == (0b11000011 if dut.qspi_pinout.value else 0b11001001)
+        assert dut.uio_oe.value == (0b11111111 if dut.qspi_pinout.value else 0b11111111)
         addr <<= 4
 
     for i in range(7):
@@ -130,11 +127,12 @@ async def test_sync(dut):
 async def test_data(dut):
     await start_640x480(dut)
 
-    # Wait for data read begin
-    await expect_read_cmd(dut, 0)
+    for i in range(10):
+        # Wait for data read begin
+        await expect_read_cmd(dut, 320*(i//2))
 
-    # Send pixel data
-    for i in range(320):
-        await qspi_send_byte(dut, (i+15) & 0xff)
-    
-    await RisingEdge(dut.qspi_cs)
+        # Send pixel data
+        for i in range(320):
+            await qspi_send_byte(dut, (i+15) & 0xff)
+        
+        await RisingEdge(dut.qspi_cs)

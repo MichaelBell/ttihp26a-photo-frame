@@ -45,9 +45,10 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
 
     localparam FSM_IDLE = 0;
     localparam FSM_CMD  = 1;
-    localparam FSM_ADDR = 2;
-    localparam FSM_DUMMY = 3;
-    localparam FSM_DATA = 4;
+    localparam FSM_ADDR_LOAD = 2;
+    localparam FSM_ADDR = 3;
+    localparam FSM_DUMMY = 4;
+    localparam FSM_DATA = 5;
 
     reg [2:0] fsm_state;
     reg [11:0] spi_miso_buf;
@@ -56,6 +57,7 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
     reg [BITS_REM_BITS-1:0] bits_remaining;
     reg spi_clk;
     reg spi_clk_n;
+    reg [3:0] spi_data_in_n;
 
     assign data_out = data;
 
@@ -79,9 +81,9 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
                 end
             end else begin
                 spi_clk <= !spi_clk;
-                if (bits_remaining == 0 && (!fsm_state[0] || spi_clk)) begin
+                if (bits_remaining == 0 && (fsm_state == FSM_ADDR || fsm_state == FSM_ADDR_LOAD || fsm_state == FSM_DATA || spi_clk)) begin
                     fsm_state <= fsm_state + 1;
-                    if (fsm_state == FSM_CMD)        bits_remaining <= 7;
+                    if (fsm_state == FSM_ADDR_LOAD)  bits_remaining <= 7;
                     else if (fsm_state == FSM_ADDR)  bits_remaining <= 5;
                     else if (fsm_state == FSM_DUMMY) bits_remaining <= 3 + latency;
                     else if (fsm_state == FSM_DATA) begin
@@ -92,7 +94,7 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
                     if (fsm_state == FSM_CMD) spi_data_oe <= 4'b1111;
                     else if (fsm_state == FSM_ADDR) spi_data_oe <= 4'b0000;
                 end else begin
-                    if (!fsm_state[0] || spi_clk) bits_remaining <= bits_remaining - 1;
+                    if (fsm_state == FSM_ADDR || fsm_state == FSM_DATA || spi_clk) bits_remaining <= bits_remaining - 1;
                 end
             end
         end
@@ -106,8 +108,9 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
         end
     end
 
+    always @(negedge clk) spi_data_in_n <= spi_data_in;
     always @(posedge clk) begin
-        spi_miso_buf <= {spi_miso_buf[7:0], spi_data_in};
+        spi_miso_buf <= {spi_miso_buf[7:0], use_neg_spi_clk ? spi_data_in_n : spi_data_in};
     end
 
     reg [3:0] spi_miso_in;
@@ -126,7 +129,7 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
     assign spi_select = fsm_state == FSM_IDLE;
 
     always @(negedge clk) spi_clk_n <= spi_clk;
-    assign spi_clk_out = use_neg_spi_clk ? spi_clk_n : spi_clk;
+    assign spi_clk_out = spi_clk_n;
 
     wire [7:0] read_cmd = 8'hED;
     assign spi_data_out = fsm_state == FSM_CMD  ? {3'b000, read_cmd[bits_remaining[2:0]]} :

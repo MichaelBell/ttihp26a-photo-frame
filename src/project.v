@@ -44,6 +44,7 @@ module tt_um_MichaelBell_photo_frame (
   wire [10:0] col;
   wire row_pulse;
   wire frame_pulse;
+  reg new_frame;
 
   wire hsync;
   wire vsync;
@@ -77,9 +78,14 @@ module tt_um_MichaelBell_photo_frame (
   always @(posedge clk) begin
     if (!rst_n || frame_pulse) begin
       addr_in <= {ui_in[7], 23'b0};
+      new_frame <= 1;
     end else begin
-      if (row_pulse && !row[0]) begin
-        addr_in <= addr_in + {14'h0, col[10:1]} + 24'h1;
+      if (row_pulse && row[0]) begin
+        if (new_frame) begin
+          new_frame <= 0;
+        end else begin
+          addr_in <= addr_in + {14'h0, col[10:1]} + 24'h1;
+        end
       end
     end
   end
