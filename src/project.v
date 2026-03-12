@@ -41,7 +41,7 @@ module tt_um_MichaelBell_photo_frame (
   wire pixel_valid;
 
   wire [10:0] row;
-  wire [10:0] col;
+  wire [11:0] col;
   wire row_pulse;
   wire frame_pulse;
   reg new_frame;
@@ -54,6 +54,34 @@ module tt_um_MichaelBell_photo_frame (
   reg [1:0] R;
   reg [1:0] G;
   reg [1:0] B;
+
+  reg [2:0] cfg_clk_sync;
+  reg [1:0] cfg_data_sync;
+  reg [1:0] en_sync;
+  reg [1:0] cfg_sel_sync;
+
+  always @(posedge clk) begin
+      cfg_clk_sync <= {cfg_clk_sync[1:0], ui_in[0]};
+      cfg_data_sync <= {cfg_data_sync[0], ui_in[1]};
+      en_sync <= {en_sync[0], ui_in[2]};
+      cfg_sel_sync <= {cfg_sel_sync[0], ui_in[7]};
+  end
+
+  wire cfg_pulse = cfg_clk_sync[1] && !cfg_clk_sync[2];
+
+  localparam CONFIG_LEN = 8;
+  reg [CONFIG_LEN-1:0] cfg;
+
+  always @(posedge clk) begin
+    if (!rst_n) cfg <= 0;
+    else if (cfg_pulse & cfg_sel_sync[1]) begin
+        // Rising edge of cfg_clk
+        cfg <= {cfg[CONFIG_LEN-2:0], cfg_data_sync[1]};
+    end
+  end
+
+  wire full_res = cfg[7];
+  wire [6:0] addr_hi = cfg[6:0];
 
   qspi_dtr_flash_read i_qpsi (
     clk,
@@ -76,15 +104,13 @@ module tt_um_MichaelBell_photo_frame (
 
   always @(posedge clk) begin
     if (!rst_n || frame_pulse) begin
-      addr_in <= {ui_in[7], 23'b0};
       new_frame <= 1;
     end else begin
-      if (row_pulse && row[0]) begin
-        if (new_frame) begin
-          new_frame <= 0;
-        end else begin
-          addr_in <= addr_in + {14'h0, col[10:1]} + 24'h1;
-        end
+      if (active && col[0] && (!row[0] || full_res)) begin
+        addr_in <= addr_in + 24'h1;
+        new_frame <= 0;
+      end else if (new_frame) begin
+        addr_in <= {addr_hi, 17'b0};
       end
     end
   end
@@ -93,9 +119,9 @@ module tt_um_MichaelBell_photo_frame (
     clk,
     rst_n,
     
-    ui_in[0],
-    ui_in[1],
-    ui_in[2],
+    cfg_pulse & !cfg_sel_sync[1],
+    cfg_data_sync[1],
+    en_sync[1],
 
     row,
     col,
