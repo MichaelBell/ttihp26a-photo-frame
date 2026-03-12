@@ -68,7 +68,7 @@ async def qspi_send_byte(dut, data):
     assert dut.qspi_cs.value == 0
     await FallingEdge(dut.qspi_clk)
 
-async def start_640x480(dut):
+async def start_640x480(dut, latency=2):
     dut._log.info("Start")
 
     # Set the clock period to 40 ns (25 MHz)
@@ -76,14 +76,14 @@ async def start_640x480(dut):
     cocotb.start_soon(clock.start())
 
     # Reset
-    dut._log.info("Reset")
+    dut._log.info(f"Reset, latency {latency}")
     dut.ena.value = 1
     dut.cfg_clk.value = 0
     dut.cfg_dat.value = 0
     dut.display_en.value = 0
     dut.qspi_pinout.value = 0
-    dut.qspi_half_clk.value = 0
-    dut.qspi_latency.value = 1
+    dut.qspi_latency.value = latency
+    dut.latency.value = latency - 1
     dut.addr_hi.value = 0
     dut.uio_in.value = 0
     dut.rst_n.value = 0
@@ -95,12 +95,24 @@ async def start_640x480(dut):
     assert dut.qspi_cs.value == 1
 
     # Feed in 640x480 VGA config
-    await write_config(dut, 41, 1, 1, 639, 15, 95, 47, 479, 9, 1, 32)
+    await write_config(dut, 40 + latency, 1, 1, 639, 15, 95, 47, 479, 9, 1, 32)
 
     dut._log.info("Enabling display")
 
     dut.display_en.value = 1
     await ClockCycles(dut.clk, 2)
+
+async def send_pixel_data(dut, data, addr=0):
+    # Wait for data read begin
+    await expect_read_cmd(dut, addr)
+
+    for d in data:
+        await qspi_send_byte(dut, d)
+
+    await RisingEdge(dut.qspi_cs)
+
+def colour_from_byte(b):
+    return ((b >> 2) & 0x30) | ((b >> 1) & 0xc) | (b & 0x3)
 
 @cocotb.test()
 async def test_sync(dut):
@@ -127,12 +139,129 @@ async def test_sync(dut):
 async def test_data(dut):
     await start_640x480(dut)
 
-    for i in range(10):
-        # Wait for data read begin
-        await expect_read_cmd(dut, 320*(i//2))
+    # Check data
+    vsync = 1
+    for i in range(32):
+        for j in range(48):
+            assert dut.vsync.value == vsync
+            assert dut.hsync.value == 1
+            await ClockCycles(dut.clk, 1)
+        for j in range(640+16):
+            assert dut.vsync.value == vsync
+            assert dut.hsync.value == 1
+            await ClockCycles(dut.clk, 1)
+        for j in range(96):
+            assert dut.vsync.value == vsync
+            assert dut.hsync.value == 0
+            await ClockCycles(dut.clk, 1)
 
+    for k in range(480):
         # Send pixel data
-        for i in range(320):
-            await qspi_send_byte(dut, (i+15) & 0xff)
+        pixel_data = ((i+15+3*k) & 0xff for i in range(320))
+        data_task = cocotb.start_soon(
+            send_pixel_data(dut, pixel_data, (k // 2) * 320))
+        pixel_data = ((i+15+3*k) & 0xff for i in range(320))
         
-        await RisingEdge(dut.qspi_cs)
+        for j in range(48):
+            assert dut.vsync.value == 1
+            assert dut.hsync.value == 1
+            assert dut.colour.value == 0
+            await ClockCycles(dut.clk, 1)
+        for d in pixel_data:
+            assert dut.vsync.value == 1
+            assert dut.hsync.value == 1
+            assert dut.colour.value == colour_from_byte(d)
+            await ClockCycles(dut.clk, 1)
+            assert dut.vsync.value == 1
+            assert dut.hsync.value == 1
+            assert dut.colour.value == colour_from_byte(d)
+            await ClockCycles(dut.clk, 1)
+        for j in range(16):
+            assert dut.vsync.value == 1
+            assert dut.hsync.value == 1
+            assert dut.colour.value == 0
+            await ClockCycles(dut.clk, 1)
+        for j in range(96):
+            assert dut.vsync.value == 1
+            assert dut.hsync.value == 0
+            await ClockCycles(dut.clk, 1)
+
+        await data_task
+
+    for i in range(32+480, 525):
+        for j in range(48):
+            assert dut.vsync.value == vsync
+            assert dut.hsync.value == 1
+            await ClockCycles(dut.clk, 1)
+        vsync = 0 if i in (480+10+33-1, 480+10+33) else 1
+        for j in range(640+16):
+            assert dut.vsync.value == vsync
+            assert dut.hsync.value == 1
+            await ClockCycles(dut.clk, 1)
+        for j in range(96):
+            assert dut.vsync.value == vsync
+            assert dut.hsync.value == 0
+            await ClockCycles(dut.clk, 1)
+
+@cocotb.test()
+async def test_latency(dut):
+    for latency in range(2, 8):
+        await start_640x480(dut, latency)
+
+        # Check data
+        vsync = 1
+        for i in range(32):
+            if i != 0:
+                assert dut.vsync.value == vsync
+                assert dut.hsync.value == 0
+                await ClockCycles(dut.clk, 1)
+            for j in range(48):
+                assert dut.vsync.value == vsync
+                assert dut.hsync.value == 1
+                await ClockCycles(dut.clk, 1)
+            for j in range(640+16):
+                assert dut.vsync.value == vsync
+                assert dut.hsync.value == 1
+                await ClockCycles(dut.clk, 1)
+            for j in range(95):
+                assert dut.vsync.value == vsync
+                assert dut.hsync.value == 0
+                await ClockCycles(dut.clk, 1)
+
+        for k in range(5):
+            # Send pixel data
+            pixel_data = ((i+15+3*k) & 0xff for i in range(320))
+            data_task = cocotb.start_soon(
+                send_pixel_data(dut, pixel_data, (k // 2) * 320))
+            pixel_data = ((i+15+3*k) & 0xff for i in range(320))
+
+            assert dut.vsync.value == vsync
+            assert dut.hsync.value == 0
+            await ClockCycles(dut.clk, 1)
+
+            for j in range(48):
+                assert dut.vsync.value == 1
+                assert dut.hsync.value == 1
+                assert dut.colour.value == 0
+                await ClockCycles(dut.clk, 1)
+            for d in pixel_data:
+                assert dut.vsync.value == 1
+                assert dut.hsync.value == 1
+                assert dut.colour.value == colour_from_byte(d)
+                await ClockCycles(dut.clk, 1)
+                assert dut.vsync.value == 1
+                assert dut.hsync.value == 1
+                assert dut.colour.value == colour_from_byte(d)
+                await ClockCycles(dut.clk, 1)
+            for j in range(16):
+                assert dut.vsync.value == 1
+                assert dut.hsync.value == 1
+                assert dut.colour.value == 0
+                await ClockCycles(dut.clk, 1)
+            for j in range(95):
+                assert dut.vsync.value == 1
+                assert dut.hsync.value == 0
+                await ClockCycles(dut.clk, 1)
+
+            await data_task
+

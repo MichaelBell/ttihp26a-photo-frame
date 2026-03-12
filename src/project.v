@@ -65,8 +65,7 @@ module tt_um_MichaelBell_photo_frame (
     qspi_flash_select,
     qspi_clk_out,
 
-    ui_in[4],
-    ui_in[6:5],
+    ui_in[6:4],
 
     addr_in,
     start_read,

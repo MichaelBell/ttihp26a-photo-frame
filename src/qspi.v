@@ -11,9 +11,7 @@
    To stop the data stream, pulse stop_read high.
 
    Latency configures the number of clock cycles after the
-   SPI clock pulse that data is read.  Valid values are 1-3.
-   If use_neg_spi_clk is set, then the SPI clock is delayed by
-   half a clock cycle, reducing the latency by 0.5 cycles.
+   SPI clock pulse that data is read, in half cycles.  Valid values are 2-7.
    */
 
 `default_nettype none
@@ -30,8 +28,7 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
     output           spi_clk_out,
 
     // Configuration
-    input use_neg_spi_clk,
-    input [1:0] latency,
+    input [2:0] latency,
 
     // Internal interface for reading data
     input [ADDR_BITS-1:0] addr_in,
@@ -41,7 +38,7 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
     output reg            valid
 );
 
-    localparam BITS_REM_BITS = 3;
+    localparam BITS_REM_BITS = 4;
 
     localparam FSM_IDLE = 0;
     localparam FSM_CMD  = 1;
@@ -77,15 +74,15 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
                 if (start_read) begin
                     spi_data_oe <= 4'b0001;
                     fsm_state <= FSM_CMD;
-                    bits_remaining <= 7;
+                    bits_remaining <= 15;
                 end
             end else begin
                 spi_clk <= !spi_clk;
-                if (bits_remaining == 0 && (fsm_state == FSM_ADDR || fsm_state == FSM_ADDR_LOAD || fsm_state == FSM_DATA || spi_clk)) begin
+                if (bits_remaining == 0) begin
                     fsm_state <= fsm_state + 1;
                     if (fsm_state == FSM_ADDR_LOAD)  bits_remaining <= 7;
-                    else if (fsm_state == FSM_ADDR)  bits_remaining <= 5;
-                    else if (fsm_state == FSM_DUMMY) bits_remaining <= 3 + latency;
+                    else if (fsm_state == FSM_ADDR)  bits_remaining <= 11;
+                    else if (fsm_state == FSM_DUMMY) bits_remaining <= 4'd2 + latency;
                     else if (fsm_state == FSM_DATA) begin
                         bits_remaining <= 1;
                         fsm_state <= FSM_DATA;
@@ -94,7 +91,7 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
                     if (fsm_state == FSM_CMD) spi_data_oe <= 4'b1111;
                     else if (fsm_state == FSM_ADDR) spi_data_oe <= 4'b0000;
                 end else begin
-                    if (fsm_state == FSM_ADDR || fsm_state == FSM_DATA || spi_clk) bits_remaining <= bits_remaining - 1;
+                    bits_remaining <= bits_remaining - 1;
                 end
             end
         end
@@ -110,13 +107,13 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
 
     always @(negedge clk) spi_data_in_n <= spi_data_in;
     always @(posedge clk) begin
-        spi_miso_buf <= {spi_miso_buf[7:0], use_neg_spi_clk ? spi_data_in_n : spi_data_in};
+        spi_miso_buf <= {spi_miso_buf[7:0], latency[0] ? spi_data_in_n : spi_data_in};
     end
 
     reg [3:0] spi_miso_in;
     always @(*) begin
-        if (latency == 2'b11) spi_miso_in = spi_miso_buf[11:8];
-        else if (latency[1]) spi_miso_in = spi_miso_buf[7:4];
+        if (latency[2:1] == 2'b11) spi_miso_in = spi_miso_buf[11:8];
+        else if (latency[2]) spi_miso_in = spi_miso_buf[7:4];
         else spi_miso_in = spi_miso_buf[3:0];
     end
 
@@ -132,7 +129,7 @@ module qspi_dtr_flash_read #(parameter ADDR_BITS=24) (
     assign spi_clk_out = spi_clk_n;
 
     wire [7:0] read_cmd = 8'hED;
-    assign spi_data_out = fsm_state == FSM_CMD  ? {3'b000, read_cmd[bits_remaining[2:0]]} :
+    assign spi_data_out = fsm_state == FSM_CMD  ? {3'b000, read_cmd[bits_remaining[3:1]]} :
                           fsm_state == FSM_ADDR ? addr[ADDR_BITS-1:ADDR_BITS-4] :
                                                   4'b0000;
     always @(posedge clk) valid <= fsm_state == FSM_DATA && bits_remaining == 0;

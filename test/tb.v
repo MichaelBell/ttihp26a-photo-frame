@@ -25,8 +25,7 @@ module tb ();
 
   reg cfg_clk, cfg_dat, display_en;
   reg qspi_pinout;
-  reg qspi_half_clk;
-  reg [1:0] qspi_latency;
+  reg [2:0] qspi_latency;
   reg addr_hi;
 
   wire qspi_clk = qspi_pinout ? uio_out[1] : uio_out[3];
@@ -35,14 +34,14 @@ module tb ();
   wire [3:0] qspi_miso;
 
   reg [3:0] qspi_miso_in;
-  reg [3:0] qspi_miso_buf [1:5];
+  reg [3:0] qspi_miso_buf [1:7];
 
   always @(posedge clk or negedge clk) begin
     qspi_miso_buf[1] <= qspi_miso_in;
   end
   genvar i;
   generate
-  for (i = 1; i < 5; i = i + 1) begin
+  for (i = 1; i < 7; i = i + 1) begin
     always @(posedge clk or negedge clk) begin
       qspi_miso_buf[i+1] <= qspi_miso_buf[i];
     end
@@ -57,7 +56,7 @@ module tb ();
 
   assign uio_in = qspi_pinout ? {2'b00, qspi_miso[3:0], 2'b00} : {2'b00, qspi_miso[3:2], 1'b0, qspi_miso[1:0], 1'b0};
 
-  assign ui_in = {addr_hi, qspi_latency, qspi_half_clk, qspi_pinout, display_en, cfg_dat, cfg_clk};
+  assign ui_in = {addr_hi, qspi_latency, qspi_pinout, display_en, cfg_dat, cfg_clk};
 
   wire [5:0] colour = {uo_out[0], uo_out[4], uo_out[1], uo_out[5], uo_out[2], uo_out[6]};
   wire hsync = uo_out[7];
