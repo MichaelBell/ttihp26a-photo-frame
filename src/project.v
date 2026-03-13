@@ -69,7 +69,7 @@ module tt_um_MichaelBell_photo_frame (
 
   wire cfg_pulse = cfg_clk_sync[1] && !cfg_clk_sync[2];
 
-  localparam CONFIG_LEN = 8;
+  localparam CONFIG_LEN = 9;
   reg [CONFIG_LEN-1:0] cfg;
 
   always @(posedge clk) begin
@@ -80,6 +80,7 @@ module tt_um_MichaelBell_photo_frame (
     end
   end
 
+  wire dither = cfg[8];
   wire full_res = cfg[7];
   wire [6:0] addr_hi = cfg[6:0];
 
@@ -133,6 +134,22 @@ module tt_um_MichaelBell_photo_frame (
     active
   );
 
+  wire [1:0] dithered_R;
+  wire [1:0] dithered_G;
+
+  dither_lookup red_dither(
+    pixel_data[7:5],
+    full_res ? col[2:1] : col[1:0],
+    row[1:0],
+    dithered_R
+  );
+  dither_lookup green_dither(
+    pixel_data[4:2],
+    full_res ? col[2:1] : col[1:0],
+    row[1:0] ^ 2'b11,
+    dithered_G
+  );
+
   always @(posedge clk) begin
     hsync_r <= hsync;
     vsync_r <= vsync;
@@ -143,8 +160,13 @@ module tt_um_MichaelBell_photo_frame (
       B <= 0;
     end else begin
       if (pixel_valid) begin
-        R <= pixel_data[7:6];
-        G <= pixel_data[4:3];
+        if (dither) begin
+          R <= dithered_R;
+          G <= dithered_G;
+        end else begin
+          R <= pixel_data[7:6];
+          G <= pixel_data[4:3];
+        end
         B <= pixel_data[1:0];
       end
     end

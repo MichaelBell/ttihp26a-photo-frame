@@ -31,8 +31,8 @@ async def write_config(dut, pulse_count, h_pol, v_pol, h_display, h_front, h_syn
     
     await ClockCycles(dut.clk, 4)
 
-async def write_qspi_config(dut, addr, full_res):
-    data = (full_res << 7) | addr
+async def write_qspi_config(dut, addr, full_res, dither):
+    data = (dither << 8) | (full_res << 7) | addr
     
     dut.cfg_sel.value = 1
     await ClockCycles(dut.clk, 2)
@@ -124,7 +124,7 @@ async def start_640x480(dut, latency=2, addr=0):
     # Feed in 640x480 VGA config
     await write_config(dut, 40 + latency, 1, 1, 640, 16, 96, 48, 480, 10, 2, 33)
 
-    await write_qspi_config(dut, addr, 0)
+    await write_qspi_config(dut, addr, 0, 0)
 
     dut._log.info("Enabling display")
 
@@ -160,7 +160,7 @@ async def start_640x480_full_res(dut, latency=2, addr=0):
     # Feed in 640x480 VGA config
     await write_config(dut, 40 + latency, 1, 1, 640*2, 16*2, 96*2, 48*2, 480, 10, 2, 33)
 
-    await write_qspi_config(dut, addr, 1)
+    await write_qspi_config(dut, addr, 1, 0)
 
     dut._log.info("Enabling display")
 
