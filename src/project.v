@@ -137,15 +137,21 @@ module tt_um_MichaelBell_photo_frame (
   wire [1:0] dithered_R;
   wire [1:0] dithered_G;
 
+  reg [7:2] pixel_data_r;
+  always @(posedge clk) begin
+    if (!active) pixel_data_r <= 0;
+    else if (pixel_valid) pixel_data_r <= pixel_data[7:2];
+  end
+
   dither_lookup red_dither(
-    pixel_data[7:5],
+    pixel_valid ? pixel_data[7:5] : pixel_data_r[7:5],
     full_res ? col[2:1] : col[1:0],
     row[1:0],
     dithered_R
   );
   dither_lookup green_dither(
-    pixel_data[4:2],
-    full_res ? col[2:1] : col[1:0],
+    pixel_valid ? pixel_data[4:2] : pixel_data_r[4:2],
+    (full_res ? col[2:1] : col[1:0]) ^ 2'b11,
     row[1:0] ^ 2'b11,
     dithered_G
   );
@@ -159,14 +165,13 @@ module tt_um_MichaelBell_photo_frame (
       G <= 0;
       B <= 0;
     end else begin
-      if (pixel_valid) begin
-        if (dither) begin
-          R <= dithered_R;
-          G <= dithered_G;
-        end else begin
-          R <= pixel_data[7:6];
-          G <= pixel_data[4:3];
-        end
+      if (dither) begin
+        R <= dithered_R;
+        G <= dithered_G;
+        if (pixel_valid) B <= pixel_data[1:0];
+      end else if (pixel_valid) begin
+        R <= pixel_data[7:6];
+        G <= pixel_data[4:3];
         B <= pixel_data[1:0];
       end
     end
@@ -178,6 +183,6 @@ module tt_um_MichaelBell_photo_frame (
   assign uo_out = {hsync_r, B[0], G[0], R[0], vsync_r, B[1], G[1], R[1]};
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{ena, uio_in[7:6], uio_in[0], pixel_data[5], pixel_data[2], row, 1'b0};
+  wire _unused = &{ena, uio_in[7:6], uio_in[0], pixel_data[5], pixel_data[2], row[10:2], 1'b0};
 
 endmodule
