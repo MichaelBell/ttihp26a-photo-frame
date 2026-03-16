@@ -97,7 +97,7 @@ module display (
     end
 
     assign row_pulse = ((v_state == STATE_DISPLAY && v_count != 0) || (v_state == STATE_BACK && v_count == 0)) && h_count == {6'h0, pulse_count} && (h_state == STATE_BACK);
-    assign frame_pulse = (v_state == STATE_DISPLAY && h_state == STATE_DISPLAY && v_count == 0 && h_count == 0);
+    assign frame_pulse = (v_state == STATE_SYNC && h_state == STATE_DISPLAY && v_count == 0 && h_count == 0);
 
     assign row = v_state == STATE_DISPLAY ? v_count : v_display;
     assign col = (h_state == STATE_DISPLAY && v_state == STATE_DISPLAY) ? h_count : h_display;
